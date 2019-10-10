@@ -67,7 +67,11 @@ int main(int argc, char** argv) {
       const float operand = elements.back();
       elements.pop_back();
 
-      MPI_Send(&operand, 1, MPI_FLOAT, myRank+1, 0, MPI_COMM_WORLD);
+      // Ultimo processador
+      if (myRank == numProcessors - 1)
+        MPI_Send(&operand, 1, MPI_FLOAT, 1, 0, MPI_COMM_WORLD);
+      else
+        MPI_Send(&operand, 1, MPI_FLOAT, myRank+1, 0, MPI_COMM_WORLD);
     }
     // Só sendo garantido que o número elementos é igual entre os processos.
     for (int i = 0; i < elementsLenght -1; i++) {
