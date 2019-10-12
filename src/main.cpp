@@ -1,100 +1,73 @@
-#include <cassert>
+#include <mpi.h>
+#include <time.h>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
-#include <mpi.h>
 #include <string>
 #include <vector>
-#define MAINPROC 0
+
+void send(const float value, const int to);
+float receive(const int from);
 
 int main(int argc, char** argv) {
-  int numProcessors;
-  int myRank;
+  int processors;
+  int rank;
 
-  MPI_Init(NULL, NULL);
-  MPI_Comm_size(MPI_COMM_WORLD, &numProcessors);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+  MPI_Init(nullptr, nullptr);
+  MPI_Comm_size(MPI_COMM_WORLD, &processors);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  if (myRank == MAINPROC) {
-    
-    std::string type;
+  const int master = 0;
+  const int last = processors - 1;
+
+  clock_t start;
+  std::string type;
+  if (rank == master) {
+    start = clock();
     std::cin >> type;
 
-    int elementsLenght;
-    std::cin >> elementsLenght;
-    const int elementsPerProcLenght = elementsLenght / numProcessors;
-
-    std::vector<float> elements(elementsLenght);
-    for (int i = 0; i < elementsLenght; i++)
-      std::cin >> elements[i];
-    
-    for (int dest = 1; dest < numProcessors; dest++) {
-      MPI_Send(&elementsLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
-      for (int i = elementsPerProcLenght*(dest -1); i - elementsPerProcLenght*dest < 
-        + elementsPerProcLenght; i++) {
-
-        MPI_Send(&elements[i], 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
-      }
+    int elements;
+    std::cin >> elements;
+    for (int i = 0; i < elements; i++) {
+      float value;
+      std::cin >> value;
+      send(value, i);
     }
+  }
 
-    float sum = 0;
-    for (int dest = 1; dest < numProcessors; dest++) {
-      float element;
-      MPI_Recv(&element, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      sum += element;
-    }
+  float value = receive(master);
+  if (rank % 2 == 0)
+    send(value, rank + 1);
+  for (int d = 0; d < log2(processors); d++) {
+    const int power = pow(2, d + 1);
+    if ((rank + 1) % power != 0)
+      continue;
+    value += receive(rank - power / 2);
+    if (rank != last)
+      send(value, rank + power);
+  }
 
-    clock_t tStart = clock();
-
-    // TODO: distribution of work and receive Sum.
-
-    clock_t tEnd = clock();
-    if (type == "all") {
-      std::cout << "Value to print: " << sum << std::endl;
-    
-      const double duration = double(tEnd - tStart)/CLOCKS_PER_SEC;
-      std::cout << "Time: " << std::setprecision(6) << duration << " seconds" << std::endl;
-
-    } else if (type == "time") {
-      const double duration = double(tEnd - tStart)/CLOCKS_PER_SEC;
-      std::cout << "Time: " << std::setprecision(6) << duration << " seconds" << std::endl;
-
-    } else {
-      std::cout << "Value to print: " << sum << std::endl;
-    }
-
-  } else {
-    int elementsLenght;
-    MPI_Recv(&elementsLenght, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    std::vector<float> elements;
-    for (int i = 0; i < elementsLenght; i++) {
-      MPI_Recv(&elements[i], 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-
-    while(elements.size() > 1) {
-      const int processComm = myRank % 2 == 0 ? 
-        myRank - 1 
-      : 
-        myRank + 1 < numProcessors ? myRank + 1 : 1;
-
-      const float operand = elements.back();
-      elements.pop_back();
-
-      MPI_Send(&operand, 1, MPI_FLOAT, processComm, 0, MPI_COMM_WORLD);
-
-      float operand2;
-      MPI_Recv(&operand2, 1, MPI_FLOAT, processComm, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-      elements.push_back(operand + operand2);
-    }
-
-    const float operand = elements.back();
-    elements.pop_back();
-    assert(elements.empty());
-    MPI_Send(&operand, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD);
-
+  if (rank == last)
+    send(value, master);
+  if (rank == master) {
+    value = receive(last);
+    double duration = (clock() - start) / CLOCKS_PER_SEC;
+    if (type == "sum" || type == "all")
+      std::cout << std::setprecision(2) << value << std::endl;
+    if (type == "time" || type == "all")
+      std::cout << duration << std::endl;
   }
 
   MPI_Finalize();
   return 0;
+}
+
+void send(const float value, const int to) {
+  MPI_Request request;
+  MPI_Isend(&value, 1, MPI_FLOAT, to, 0, MPI_COMM_WORLD, &request);
+}
+float receive(const int from) {
+  float value;
+  MPI_Recv(&value, 1, MPI_FLOAT, from, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  return value;
 }
