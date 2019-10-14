@@ -21,16 +21,17 @@ int main(int argc, char** argv) {
 
     int elementsLenght;
     std::cin >> elementsLenght;
-    const int elementsPerProcLenght = elementsLenght / numProcessors;
+    const int elementsPerProcLenght = elementsLenght / (numProcessors - 1);
 
     std::vector<float> elements(elementsLenght);
     for (int i = 0; i < elementsLenght; i++)
       std::cin >> elements[i];
     
     for (int dest = 1; dest < numProcessors; dest++) {
-      MPI_Send(&elementsLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
-      for (int i = elementsPerProcLenght*(dest -1); i - elementsPerProcLenght*dest < 
-        + elementsPerProcLenght; i++) {
+      MPI_Send(&elementsPerProcLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
+      std::cout << "ElementsPerProcMaster: " << elementsPerProcLenght << std::endl;
+      for (int i = elementsPerProcLenght*(dest -1); i - elementsPerProcLenght*(dest -1) < 
+        elementsPerProcLenght; i++) {
 
         MPI_Send(&elements[i], 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       }
@@ -66,16 +67,21 @@ int main(int argc, char** argv) {
     int elementsLenght;
     MPI_Recv(&elementsLenght, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    std::vector<float> elements;
+    std::vector<float> elements(elementsLenght);
     for (int i = 0; i < elementsLenght; i++) {
-      MPI_Recv(&elements[i], 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      float element;
+      MPI_Recv(&element, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      elements.push_back(element);
     }
 
     while(elements.size() > 1) {
-      const int processComm = myRank % 2 == 0 ? 
+      int processComm = myRank % 2 == 0 ? 
         myRank - 1 
       : 
         myRank + 1 < numProcessors ? myRank + 1 : 1;
+
+      if (processComm == MAINPROC)
+      processComm += 1;
 
       const float operand = elements.back();
       elements.pop_back();
