@@ -29,7 +29,6 @@ int main(int argc, char** argv) {
     
     for (int dest = 1; dest < numProcessors; dest++) {
       MPI_Send(&elementsPerProcLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
-      std::cout << "ElementsPerProcMaster: " << elementsPerProcLenght << std::endl;
       for (int i = elementsPerProcLenght*(dest -1); i - elementsPerProcLenght*(dest -1) < 
         elementsPerProcLenght; i++) {
 
@@ -40,7 +39,7 @@ int main(int argc, char** argv) {
     float sum = 0;
     for (int dest = 1; dest < numProcessors; dest++) {
       float element;
-      MPI_Recv(&element, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(&element, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       sum += element;
     }
 
@@ -67,26 +66,35 @@ int main(int argc, char** argv) {
     int elementsLenght;
     MPI_Recv(&elementsLenght, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    std::vector<float> elements(elementsLenght);
+    std::vector<float> elements;
+    elements.reserve(elementsLenght);
     for (int i = 0; i < elementsLenght; i++) {
       float element;
       MPI_Recv(&element, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       elements.push_back(element);
     }
 
-    while(elements.size() > 1) {
-      int processComm = myRank % 2 == 0 ? 
-        myRank - 1 
-      : 
-        myRank + 1 < numProcessors ? myRank + 1 : 1;
+    int processComm = myRank % 2 == 0 ? 
+      myRank - 1 
+    : 
+      myRank + 1 < numProcessors ? myRank + 1 : 1;
 
-      if (processComm == MAINPROC)
+    // O processo master não recebe número pra fazer soma, só faz a final.
+    if (processComm == MAINPROC)
       processComm += 1;
 
+    // Manda todos os elementos para o outro processo.
+    for (int i = 1; i < elementsLenght; i++) {
+
+      const float operand2 = elements.back();
+      elements.pop_back();
+      MPI_Send(&operand2, 1, MPI_FLOAT, processComm, 0, MPI_COMM_WORLD);
+    }
+
+    // Recebe todos os elementos do outro processo.
+    for (int i = 0; i < elementsLenght - 1; i++) {
       const float operand = elements.back();
       elements.pop_back();
-
-      MPI_Send(&operand, 1, MPI_FLOAT, processComm, 0, MPI_COMM_WORLD);
 
       float operand2;
       MPI_Recv(&operand2, 1, MPI_FLOAT, processComm, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -97,7 +105,7 @@ int main(int argc, char** argv) {
     const float operand = elements.back();
     elements.pop_back();
     assert(elements.empty());
-    MPI_Send(&operand, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD);
+    MPI_Send(&operand, 1, MPI_FLOAT, MAINPROC, 0, MPI_COMM_WORLD);
 
   }
 
