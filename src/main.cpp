@@ -22,15 +22,17 @@ int main(int argc, char** argv) {
     int elementsLenght;
     std::cin >> elementsLenght;
     const int elementsPerProcLenght = elementsLenght / (numProcessors - 1);
+    const int lastElementLenght = elementsPerProcLenght + elementsLenght % (numProcessors - 1);
 
-    std::vector<float> elements(elementsLenght);
+    std::vector<float> elements;
+    elements.resize(lastElementLenght * (numProcessors - 1), 0.0);
     for (int i = 0; i < elementsLenght; i++)
       std::cin >> elements[i];
     
     for (int dest = 1; dest < numProcessors; dest++) {
-      MPI_Send(&elementsPerProcLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
-      for (int i = elementsPerProcLenght*(dest -1); i - elementsPerProcLenght*(dest -1) < 
-        elementsPerProcLenght; i++) {
+      MPI_Send(&lastElementLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
+      for (int i = lastElementLenght*(dest -1); i - lastElementLenght*(dest -1) < 
+        lastElementLenght; i++) {
 
         MPI_Send(&elements[i], 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       }
@@ -74,14 +76,10 @@ int main(int argc, char** argv) {
       elements.push_back(element);
     }
 
-    int processComm = myRank % 2 == 0 ? 
+    const int processComm = myRank % 2 == 0 ? 
       myRank - 1 
     : 
-      myRank + 1 < numProcessors ? myRank + 1 : 1;
-
-    // O processo master não recebe número pra fazer soma, só faz a final.
-    if (processComm == MAINPROC)
-      processComm += 1;
+      myRank + 1 < numProcessors ? myRank + 1 : myRank;
 
     // Manda todos os elementos para o outro processo.
     for (int i = 1; i < elementsLenght; i++) {
