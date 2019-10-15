@@ -1,4 +1,5 @@
 #include <cassert>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <mpi.h>
@@ -29,6 +30,8 @@ int main(int argc, char** argv) {
     for (int i = 0; i < elementsLenght; i++)
       std::cin >> elements[i];
     
+    const auto startTime = std::chrono::high_resolution_clock::now();
+
     for (int dest = 1; dest < numProcessors; dest++) {
       MPI_Send(&lastElementLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
       for (int i = lastElementLenght*(dest -1); i - lastElementLenght*(dest -1) < 
@@ -45,23 +48,19 @@ int main(int argc, char** argv) {
       sum += element;
     }
 
-    clock_t tStart = clock();
-
-    // TODO: distribution of work and receive Sum.
-
-    clock_t tEnd = clock();
+    const auto endTime = std::chrono::high_resolution_clock::now();
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      endTime - startTime);
     if (type == "all") {
-      std::cout << "Value to print: " << sum << std::endl;
+      std::cout << sum << std::endl;
     
-      const double duration = double(tEnd - tStart)/CLOCKS_PER_SEC;
-      std::cout << "Time: " << std::setprecision(6) << duration << " seconds" << std::endl;
+      std::cout << duration.count() << std::endl;
 
     } else if (type == "time") {
-      const double duration = double(tEnd - tStart)/CLOCKS_PER_SEC;
-      std::cout << "Time: " << std::setprecision(6) << duration << " seconds" << std::endl;
+      std::cout << duration.count() << std::endl;
 
     } else {
-      std::cout << "Value to print: " << sum << std::endl;
+      std::cout << sum << std::endl;
     }
 
   } else {
