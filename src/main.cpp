@@ -84,26 +84,42 @@ int main(int argc, char** argv) {
     assert(elements.empty());
   }
 
-  if (myRank % 2 == 0)
-    MPI_Send(&value, 1, MPI_FLOAT, myRank + 1, 0, MPI_COMM_WORLD);
-  for (int d = 0; d < log2(numProcessors); d++) {
-    const int power = pow(2, d + 1);
-    if ((myRank + 1) % power != 0)
-      continue;
-    float received;
-    MPI_Recv(&received, 1, MPI_FLOAT, myRank - power / 2, 0, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
-    value += received;
-    if (myRank != numProcessors - 1)
-      MPI_Send(&value, 1, MPI_FLOAT, myRank + power, 0, MPI_COMM_WORLD);
+  // Remoção de processos excedentes
+  int limit = pow(2, (int)log2(numProcessors)) - 1;
+  if (myRank >= limit) {
+    if (myRank != numProcessors - 1) {
+      float received;
+      MPI_Recv(&received, 1, MPI_FLOAT, myRank + 1, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      value += received;
+    }
+    if (myRank != limit)
+      MPI_Send(&value, 1, MPI_FLOAT, myRank - 1, 0, MPI_COMM_WORLD);
   }
-  if (myRank == numProcessors - 1)
+
+  // Árvore de redução
+  if (myRank <= limit) {
+    if (myRank % 2 == 0)
+      MPI_Send(&value, 1, MPI_FLOAT, myRank + 1, 0, MPI_COMM_WORLD);
+    for (int d = 0; d < log2(limit + 1); d++) {
+      const int power = pow(2, d + 1);
+      if ((myRank + 1) % power != 0)
+        continue;
+      float received;
+      MPI_Recv(&received, 1, MPI_FLOAT, myRank - power / 2, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      value += received;
+      if (myRank != limit)
+        MPI_Send(&value, 1, MPI_FLOAT, myRank + power, 0, MPI_COMM_WORLD);
+    }
+  }
+  if (myRank == limit)
     MPI_Send(&value, 1, MPI_FLOAT, MAINPROC, 0, MPI_COMM_WORLD);
 
+  // Apresentação do resultado
   if (myRank == MAINPROC) {
     float sum;
-    MPI_Recv(&sum, 1, MPI_FLOAT, numProcessors - 1, 0, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
+    MPI_Recv(&sum, 1, MPI_FLOAT, limit, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     const auto endTime = std::chrono::high_resolution_clock::now();
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         endTime - startTime);
