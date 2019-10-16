@@ -5,6 +5,7 @@
 #include <mpi.h>
 #include <string>
 #include <vector>
+#include <cmath>
 #define MAINPROC 0
 
 int main(int argc, char** argv) {
@@ -15,9 +16,12 @@ int main(int argc, char** argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &numProcessors);
   MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
 
+  std::string type;
+  auto startTime = std::chrono::high_resolution_clock::now();
+  float value = 0;
+
   if (myRank == MAINPROC) {
     
-    std::string type;
     std::cin >> type;
 
     int elementsLenght;
@@ -30,7 +34,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < elementsLenght; i++)
       std::cin >> elements[i];
     
-    const auto startTime = std::chrono::high_resolution_clock::now();
+    startTime = std::chrono::high_resolution_clock::now();
 
     for (int dest = 1; dest < numProcessors; dest++) {
       MPI_Send(&lastElementLenght, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
@@ -40,29 +44,6 @@ int main(int argc, char** argv) {
         MPI_Send(&elements[i], 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       }
     }
-
-    float sum = 0;
-    for (int dest = 1; dest < numProcessors; dest++) {
-      float element;
-      MPI_Recv(&element, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      sum += element;
-    }
-
-    const auto endTime = std::chrono::high_resolution_clock::now();
-    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-      endTime - startTime);
-    if (type == "all") {
-      std::cout << sum << std::endl;
-    
-      std::cout << duration.count() << std::endl;
-
-    } else if (type == "time") {
-      std::cout << duration.count() << std::endl;
-
-    } else {
-      std::cout << sum << std::endl;
-    }
-
   } else {
     int elementsLenght;
     MPI_Recv(&elementsLenght, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -99,10 +80,43 @@ int main(int argc, char** argv) {
       elements.push_back(operand + operand2);
     }
 
-    const float operand = elements.back();
+    value = elements.back();
     elements.pop_back();
     assert(elements.empty());
-    MPI_Send(&operand, 1, MPI_FLOAT, MAINPROC, 0, MPI_COMM_WORLD);
+  }
+
+  if (myRank % 2 == 0)
+    MPI_Send(&value, 1, MPI_FLOAT, myRank + 1, 0, MPI_COMM_WORLD);
+  for (int d = 0; d < log2(numProcessors); d++) {
+    const int power = pow(2, d + 1);
+    if ((myRank + 1) % power != 0)
+      continue;
+    float received;
+    MPI_Recv(&received, 1, MPI_FLOAT, myRank - power / 2, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    value += received;
+    if (myRank != numProcessors - 1)
+      MPI_Send(&value, 1, MPI_FLOAT, myRank + power, 0, MPI_COMM_WORLD);
+  }
+  if (myRank == numProcessors - 1)
+    MPI_Send(&value, 1, MPI_FLOAT, MAINPROC, 0, MPI_COMM_WORLD);
+
+  if (myRank == MAINPROC) {
+    float sum;
+    MPI_Recv(&sum, 1, MPI_FLOAT, numProcessors - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    const auto endTime = std::chrono::high_resolution_clock::now();
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      endTime - startTime);
+    if (type == "all") {
+      std::cout << sum << std::endl;
+    
+      std::cout << duration.count() << std::endl;
+
+    } else if (type == "time") {
+      std::cout << duration.count() << std::endl;
+
+    } else {
+      std::cout << sum << std::endl;
+    }
 
   }
 
