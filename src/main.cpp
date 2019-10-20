@@ -85,16 +85,17 @@ int main(int argc, char** argv) {
   }
 
   // Remoção de processos excedentes
-  int limit = pow(2, (int)log2(numProcessors)) - 1;
-  if (myRank >= limit) {
-    if (myRank != numProcessors - 1) {
+  const int limit = pow(2, (int)log2(numProcessors)) -1;
+  const int numExceeds = (numProcessors - 1 - limit);
+  const int initIndex = numProcessors - 1 - numExceeds*2;
+  if (myRank > initIndex) {
+    if (myRank <= limit) {
       float received;
-      MPI_Recv(&received, 1, MPI_FLOAT, myRank + 1, 0, MPI_COMM_WORLD,
-               MPI_STATUS_IGNORE);
+      MPI_Recv(&received, 1, MPI_FLOAT, myRank + numExceeds, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       value += received;
+    } else {
+      MPI_Send(&value, 1, MPI_FLOAT, myRank - numExceeds, 0, MPI_COMM_WORLD);
     }
-    if (myRank != limit)
-      MPI_Send(&value, 1, MPI_FLOAT, myRank - 1, 0, MPI_COMM_WORLD);
   }
 
   // Árvore de redução
