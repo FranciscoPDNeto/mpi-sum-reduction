@@ -98,6 +98,7 @@ int main(int argc, char** argv) {
     }
   }
 
+  #ifndef SEQUENTIAL
   // Árvore de redução
   if (myRank <= limit) {
     if (myRank % 2 == 0)
@@ -114,6 +115,20 @@ int main(int argc, char** argv) {
         MPI_Send(&value, 1, MPI_FLOAT, myRank + power, 0, MPI_COMM_WORLD);
     }
   }
+  #else
+  // Redução sequencial
+  if (myRank == MAINPROC)
+    MPI_Send(&value, 1, MPI_FLOAT, 1, 0, MPI_COMM_WORLD);
+  else if (myRank <= limit) {
+    float acc;
+    MPI_Recv(&acc, 1, MPI_FLOAT, myRank - 1, 0, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+    value += acc;
+    if (myRank != limit)
+      MPI_Send(&value, 1, MPI_FLOAT, myRank + 1, 0, MPI_COMM_WORLD);
+  }
+  #endif
+
   if (myRank == limit)
     MPI_Send(&value, 1, MPI_FLOAT, MAINPROC, 0, MPI_COMM_WORLD);
 
