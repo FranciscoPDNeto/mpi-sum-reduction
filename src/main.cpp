@@ -84,6 +84,7 @@ int main(int argc, char** argv) {
     assert(elements.empty());
   }
 
+  #ifndef SEQUENTIAL
   // Remoção de processos excedentes
   const int limit = pow(2, (int)log2(numProcessors)) -1;
   const int numExceeds = (numProcessors - 1 - limit);
@@ -97,8 +98,6 @@ int main(int argc, char** argv) {
       MPI_Send(&value, 1, MPI_FLOAT, myRank - numExceeds, 0, MPI_COMM_WORLD);
     }
   }
-
-  #ifndef SEQUENTIAL
   // Árvore de redução
   if (myRank <= limit) {
     if (myRank % 2 == 0)
@@ -116,6 +115,7 @@ int main(int argc, char** argv) {
     }
   }
   #else
+  const int limit = numProcessors - 1;
   // Redução sequencial
   if (myRank == MAINPROC)
     MPI_Send(&value, 1, MPI_FLOAT, 1, 0, MPI_COMM_WORLD);
